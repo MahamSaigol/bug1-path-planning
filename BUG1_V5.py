@@ -431,6 +431,59 @@ def animate_path(path_points, effective_obstacles, workspace, safe_boundary,
         print("Could not save gif:", e)
     plt.show()
 
+
+def get_start_goal_by_click(workspace, inflated_obstacles, boundary_orig):
+    fig, ax = plt.subplots(figsize=(7, 7))
+
+    # Draw boundary
+    bx, by = boundary_orig.exterior.xy
+    ax.plot(bx, by, "b-", lw=2, label="Boundary")
+
+    # Draw inflated obstacles
+    for obs in inflated_obstacles:
+        x, y = obs.exterior.xy
+        ax.fill(x, y, color="gray", alpha=0.5)
+
+    ax.set_title("Click START (green) then GOAL (red)")
+    ax.set_aspect("equal")
+    ax.grid(True)
+    ax.legend()
+
+    points = []
+
+    def onclick(event):
+        if event.inaxes != ax:
+            return
+        p = Point(event.xdata, event.ydata)
+
+        # Validate click
+        if not workspace.contains(p):
+            print("❌ Point outside workspace")
+            return
+        for obs in inflated_obstacles:
+            if obs.contains(p) or obs.touches(p):
+                print("❌ Point inside obstacle")
+                return
+
+        points.append((event.xdata, event.ydata))
+
+        if len(points) == 1:
+            ax.plot(event.xdata, event.ydata, "go", markersize=9)
+            ax.set_title("Now click GOAL (red)")
+        elif len(points) == 2:
+            ax.plot(event.xdata, event.ydata, "ro", markersize=9)
+            plt.close(fig)
+
+        fig.canvas.draw()
+
+    cid = fig.canvas.mpl_connect("button_press_event", onclick)
+    plt.show()
+
+    if len(points) < 2:
+        raise RuntimeError("Start/Goal not selected properly.")
+
+    return points[0], points[1]
+
 # ---------------- Main ----------------
 if __name__ == "__main__":
     # --- params & input ---
@@ -468,13 +521,21 @@ if __name__ == "__main__":
 
     # get start/goal (random or manual)
     USE_RANDOM = False
+    USE_MOUSE = True
+
     if USE_RANDOM:
         start, goal = generate_random_start_goal(workspace, inflated)
         print("Start:", start, "Goal:", goal)
+
+    elif USE_MOUSE:
+        start, goal = get_start_goal_by_click(workspace, inflated, boundary_orig)
+        print("Start:", start, "Goal:", goal)
+
     else:
         sx, sy = map(float, input("Enter start x y: ").split())
         gx, gy = map(float, input("Enter goal x y: ").split())
         start, goal = (sx, sy), (gx, gy)
+
         validate_start_goal_against_inflated(Point(start), Point(goal), inflated, workspace)
 
     # final sanity
